@@ -6,17 +6,17 @@
 // 現在着目しているトークン
 Token *token;
 
-Node *new_node(int ty, Node *lhs, Node *rhs) {
-    Node *node = malloc(sizeof(Node));
-    node->ty = ty;
+Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = kind;
     node->lhs = lhs;
     node->rhs = rhs;
     return node;
 }
 
 Node *new_node_num(int val) {
-    Node *node = malloc(sizeof(Node));
-    node->ty = ND_NUM;
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = ND_NUM;
     node->val = val;
     return node;
 }
@@ -67,9 +67,9 @@ Node *expr() {
 
     for (;;) {
         if (consume('+'))
-            node = new_node('+', node, mul());
+            node = new_node(ND_ADD, node, mul());
         else if (consume('-'))
-            node = new_node('-', node, mul());
+            node = new_node(ND_SUB, node, mul());
         else
             return node;
     }
@@ -83,9 +83,9 @@ Node *mul() {
 
     for (;;) {
         if (consume('*'))
-            node = new_node('*', node, unary());
+            node = new_node(ND_MUL, node, unary());
         else if (consume('/'))
-            node = new_node('/', node, unary());
+            node = new_node(ND_DIV, node, unary());
         else
             return node;
     }
@@ -107,7 +107,7 @@ Node *unary() {
     if (consume('+'))
         return term();
     if (consume('-'))
-        return new_node('-', new_node_num(0), term());
+        return new_node(ND_SUB, new_node_num(0), term());
     return term();
 }
 

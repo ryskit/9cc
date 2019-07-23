@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 void gen(Node *node) {
-  if (node->ty == ND_NUM) {
+  if (node->kind == ND_NUM) {
     printf("  push %d\n", node->val);
     return;
   }
@@ -13,17 +13,17 @@ void gen(Node *node) {
   printf("  pop rdi\n");
   printf("  pop rax\n");
 
-  switch (node->ty) {
-  case '+':
+  switch (node->kind) {
+  case ND_ADD:
     printf("  add rax, rdi\n");
     break;
-  case '-':
+  case ND_SUB:
     printf("  sub rax, rdi\n");
     break;
-  case '*':
+  case ND_MUL:
     printf("  imul rdi\n");
     break;
-  case '/':
+  case ND_DIV:
     printf("  cqo\n");
     printf("  idiv rdi\n");
   }
