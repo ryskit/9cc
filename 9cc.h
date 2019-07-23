@@ -4,6 +4,10 @@ typedef enum {
     ND_MUL, // *
     ND_DIV, // /
     ND_NUM, // 整数
+    ND_GREATER, // >
+    ND_GREATER_EQUAL, // >=
+    ND_LESS, // >
+    ND_LESS_EQUAL, // >=
 } NodeKind;
 
 typedef struct Node {
@@ -22,16 +26,20 @@ typedef enum {
 
 // トークンの型
 typedef struct Token {
-    TokenKind kind;	// トークン種別
-    struct Token *next;	// 次のトークン
-    int val;     	// tyがTK_NUMの場合、その数値
-    char *str;		// トークン文字列
-    char *input; 	// トークン文字列（エラーメッセージ用）
+    TokenKind kind;    // トークン種別
+    struct Token *next;    // 次のトークン
+    int val;        // tyがTK_NUMの場合、その数値
+    char *str;        // トークン文字列
+    char *input;    // トークン文字列（エラーメッセージ用）
+    int len;        // トークンの長さ
 } Token;
 
 extern Token *token;
 
 extern Token *tokenize(char *p);
+
 extern void error_exit(char *fmt, ...);
+
 extern Node *expr();
+
 extern void gen(Node *node);
