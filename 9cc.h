@@ -6,8 +6,8 @@ typedef enum {
   ND_NUM, // 整数
   ND_GREATER, // >
   ND_GREATER_EQUAL, // >=
-  ND_LESS, // >
-  ND_LESS_EQUAL, // >=
+  ND_EQUAL, // ==
+  ND_NOT_EQUAL
 } NodeKind;
 
 typedef struct Node {

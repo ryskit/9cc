@@ -77,9 +77,9 @@ Node *equality() {
 
   for (;;) {
     if (consume("=="))
-      node = new_node(ND_GREATER, node, relational());
+      node = new_node(ND_EQUAL, node, relational());
     else if (consume("!="))
-      node = new_node(ND_GREATER_EQUAL, node, relational());
+      node = new_node(ND_NOT_EQUAL, node, relational());
     else
       return node;
   }
@@ -184,6 +184,11 @@ Token *tokenize(char *p) {
           cur = new_token(TK_RESERVED, cur, p, 1);
           p++;
         }
+        continue;
+      }
+      if (strncmp(p, "==", 2) == 0 || strncmp(p, "!=", 2) == 0) {
+        cur = new_token(TK_RESERVED, cur, p, 2);
+        p += 2;
         continue;
       }
     }
