@@ -30,10 +30,7 @@ int main(int argc, char **argv) {
   // 抽象構文木を下りながらコード生成
   gen(node);
 
-  // スタックトップに式全体の値が残っているはずなので
-  // それをRAXにロードして関数からの返り値とする
-//  printf("  pop rax\n");
-//  printf("  ret\n");
+  printf("  pop rax\n");
 
   // エピローグ
   // 最後の式の結果がRAXに残っているのでそれが返り値になる
