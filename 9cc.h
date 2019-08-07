@@ -44,6 +44,8 @@ extern Token *tokenize(char *p);
 
 extern void error_exit(char *fmt, ...);
 
-extern Node *expr();
+extern void program();
 
 extern void gen(Node *node);
+
+extern Node *code[];
