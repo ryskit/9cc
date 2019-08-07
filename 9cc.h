@@ -38,6 +38,15 @@ typedef struct Token {
   int len;        // トークンの長さ
 } Token;
 
+typedef struct LVar LVar;
+
+struct LVar {
+  LVar *next; // 次の変数かNULL
+  char *name; // 変数の名前
+  int len;    // 名前の長さ
+  int offset; // RBPからのオフセット
+};
+
 extern Token *token;
 
 extern Token *tokenize(char *p);

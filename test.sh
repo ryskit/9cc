@@ -34,5 +34,6 @@ try 1 '5==5;'
 try 1 '7==7;'
 try 1 '7!=6;'
 try 99 'a=99;'
+tyr 99 'foo=99; bar=999'
 
 echo OK
