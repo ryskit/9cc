@@ -34,6 +34,7 @@ try 1 '5==5;'
 try 1 '7==7;'
 try 1 '7!=6;'
 try 99 'a=99;'
-tyr 99 'foo=99; bar=999'
+try 14 'a = 3; b = 5 * 6 - 8; return a + b / 2;'
+try 0 'foo = 4; return 0; bar = 7;'
 
 echo OK

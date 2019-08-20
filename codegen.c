@@ -24,12 +24,21 @@ void gen(Node *node) {
     case ND_ASSIGN:
       gen_lval(node->lhs);
       gen(node->rhs);
-
       printf("  pop rdi\n");
       printf("  pop rax\n");
       printf("  mov [rax], rdi\n");
       printf("  push rdi\n");
       return;
+    case ND_RETURN:
+      gen(node->lhs);
+      printf("  pop rax\n");
+      printf("  mov rsp, rbp\n");
+      printf("  pop rbp\n");
+      printf("  ret\n");
+      return;
+    default:
+      break;
+      // through
   }
 
   gen(node->lhs);
@@ -52,7 +61,7 @@ void gen(Node *node) {
       printf("  cqo\n");
       printf("  idiv rdi\n");
       break;
-      case ND_GREATER:
+    case ND_GREATER:
       printf("  cmp rax, rdi\n");
       printf("  setl al\n");
       printf("  movzx rax, al\n");
@@ -72,6 +81,9 @@ void gen(Node *node) {
       printf("  setne al\n");
       printf("  movzx rax, al\n");
       break;
+    default:
+      break;
+      // through
   }
 
   printf("  push rax\n");

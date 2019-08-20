@@ -3,9 +3,6 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
-// 入力プログラム
-char *user_input;
-
 int main(int argc, char **argv) {
   if (argc != 2) {
     error_exit("引数の個数が正しくありません");
@@ -27,13 +24,11 @@ int main(int argc, char **argv) {
   printf("  mov rbp, rsp\n");
   printf("  sub rsp, 208\n");
 
-  // 抽象構文木を下りながらコード生成
   // 先頭の式から順にコード生成
   for (int i = 0; code[i]; i++) {
     gen(code[i]);
-
-    // 式の評価結果としてスタックに一つの値が残っている
-    // はずなので、スタックが溢れないようにポップしておく
+    // 式の評価結果としてスタックに一つの値が残っているはずなので、スタック
+    // が溢れないようにポップしておく
     printf("  pop rax\n");
   }
 
@@ -42,11 +37,11 @@ int main(int argc, char **argv) {
   printf("  mov rsp, rbp\n");
   printf("  pop rbp\n");
   printf("  ret\n");
+
   return 0;
 }
 
-// エラー箇所を報告するための関数
-//  printfと同じ引数を取る
+// エラーを報告するための関数
 void error_exit(char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);

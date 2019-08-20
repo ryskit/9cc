@@ -3,6 +3,29 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
+
+// ローカル変数の型
+typedef struct LVar LVar;
+struct LVar {
+  LVar *next; // 次の変数かNULL
+  char *name; // 変数の名前
+  int len;    // 名前の長さ
+  int offset; // RBPからのオフセット
+};
+
+LVar *locals;   // ローカル変数のリストの先頭
+
+// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_lvar(Token *token) {
+  for (LVar *var = locals; var; var = var->next)
+    if (var->len == token->len && memcmp(token->str, var->name, var->len) == 0)
+      return var;
+  return NULL;
+}
+
+// 文を格納する配列
+Node *code[100];
 
 // 現在着目しているトークン
 Token *token;
@@ -32,13 +55,17 @@ bool consume(char* op) {
   return false;
 }
 
-Token* consume_ident() {
-  if (token->kind == TK_IDENT) {
+Token* consume_by_kind(TokenKind kind) {
+  if (token->kind == kind) {
     Token* t = token;
     token = token->next;
     return t;
   }
   return NULL;
+}
+
+Token* consume_ident() {
+  return consume_by_kind(TK_IDENT);
 }
 
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
@@ -60,6 +87,9 @@ int expect_number() {
 }
 
 bool at_eof() {
+  if (token == NULL) {
+    return false;
+  }
   return token->kind == TK_EOF;
 }
 
@@ -74,93 +104,6 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
 }
 
 // 前方宣言
-Node *code[100];
-
-// ローカル変数
-LVar *locals;
-
-// 変数を名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_lvar(Token *tok) {
-  for (LVar *var = locals; var; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
-      return var;
-  return NULL;
-}
-
-Node *stmt();
-
-void program() {
-  int i = 0;
-  while (!at_eof())
-    code[i++] = stmt();
-  code[i] = NULL;
-}
-
-Node *expr();
-
-Node *stmt() {
-  Node *node = expr();
-  expect(';');
-  return node;
-}
-
-Node *assign();
-
-Node *expr() {
-  return assign();
-}
-
-Node *equality();
-
-Node *assign() {
-  Node * node = equality();
-
-  if (consume("="))
-    node = new_node(ND_ASSIGN, node, equality());
-
-  return node;
-}
-
-Node *relational();
-
-Node *equality() {
-  Node *node = relational();
-
-  for (;;) {
-    if (consume("=="))
-      node = new_node(ND_EQUAL, node, relational());
-    else if (consume("!="))
-      node = new_node(ND_NOT_EQUAL, node, relational());
-    else
-      return node;
-  }
-}
-
-Node *add();
-
-Node *relational() {
-  Node *node = add();
-
-  for (;;) {
-    if (consume("<"))
-      node = new_node(ND_GREATER, node, add());
-    else if (consume("<="))
-      node = new_node(ND_GREATER_EQUAL, node, add());
-    else if (consume(">")) {
-      node = new_node(ND_GREATER, node, add());
-      Node *tmp = node->lhs;
-      node->lhs = node->rhs;
-      node->rhs = tmp;
-    } else if (consume(">=")) {
-      node = new_node(ND_GREATER_EQUAL, node, add());
-      Node *tmp = node->lhs;
-      node->lhs = node->rhs;
-      node->rhs = tmp;
-    } else
-      return node;
-  }
-}
-
 Node *mul();
 
 Node *add() {
@@ -174,6 +117,77 @@ Node *add() {
     else
       return node;
   }
+}
+
+Node *relational() {
+  Node * node = add();
+
+  for (;;) {
+    if (consume("<"))
+      node = new_node(ND_GREATER, node, add());
+    else if (consume("<="))
+      node = new_node(ND_GREATER_EQUAL, node, add());
+    else if (consume(">")) {
+      node = new_node(ND_GREATER, node, add());
+      Node *tmp = node->lhs;
+      node->lhs = node->rhs;
+      node->rhs = tmp;
+    }
+    else if (consume(">=")) {
+      node = new_node(ND_GREATER_EQUAL, node, add());
+      Node *tmp = node->lhs;
+      node->lhs = node->rhs;
+      node->rhs = tmp;
+    }
+    else
+      return node;
+  }
+}
+
+Node *equality() {
+  Node * node = relational();
+
+  for (;;) {
+    if (consume("=="))
+      node = new_node(ND_EQUAL, node, relational());
+    else if (consume("!="))
+      node = new_node(ND_NOT_EQUAL, node, relational());
+    else
+      return node;
+  }
+}
+
+Node *assign() {
+  Node * node = equality();
+  if (consume("="))
+    node = new_node(ND_ASSIGN, node, equality());
+  return node;
+}
+
+Node *expr() {
+  return assign();
+}
+
+Node *stmt() {
+  Node *node;
+  if (consume_by_kind(TK_RETURN)) {
+    node = new_node(ND_RETURN, expr(), NULL);
+  } else {
+    node = expr();
+  }
+
+  if (!consume(";"))
+    error_exit("';'ではないトークンです: %d %s", token->kind, token->str);
+
+  return node;
+}
+
+void program() {
+  int i = 0;
+  while (!at_eof()) {
+    code[i++] = stmt();
+  }
+  code[i] = NULL;
 }
 
 // 前方宣言
@@ -202,12 +216,11 @@ Node *term() {
 
   // ローカル変数
   Token* token = consume_ident();
-  if (token) {
+  if (token != NULL) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
-
     LVar *lvar = find_lvar(token);
-    if (lvar) {
+    if (lvar != NULL) {
       node->offset = lvar->offset;
     } else {
       lvar = calloc(1, sizeof(LVar));
@@ -233,8 +246,15 @@ Node *unary() {
   return term();
 }
 
+int is_alnum(char c) {
+  return ('a' <= c && c <= 'z') ||
+         ('A' <= c && c <= 'Z') ||
+         ('0' <= c && c <= '9') ||
+         (c == '_');
+}
+
 // 入力文字列pをトークナイズしてそれを返す
-Token *tokenize(char *p) {
+Token* tokenize(char *p) {
   Token head;
   head.next = NULL;
   Token *cur = &head;
@@ -246,29 +266,23 @@ Token *tokenize(char *p) {
       continue;
     }
 
-    // ローカル変数
-    char *s = p;
-    while ('a' <= *s && *s <= 'z') {
-      s++;
-    }
-    if (s != p) {
-      const int length = s - p;
-      cur = new_token(TK_IDENT, cur, p, length);
-      cur->len = length;
-      p = s;
+    // return文
+    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_RETURN, cur, p, 6);
+      p += 6;
       continue;
     }
 
+    // 関係演算子
     char *q = p + 1;
     if (*q) {
       if (*p == '>' || *p == '<') {
         if (*q == '=') {
-          cur = new_token(TK_RESERVED, cur, p, 2);
-          p += 2;
+          cur = new_token(TK_RESERVED, cur, p++, 2);
         } else {
           cur = new_token(TK_RESERVED, cur, p, 1);
-          p++;
         }
+        p++;
         continue;
       }
       if (strncmp(p, "==", 2) == 0 || strncmp(p, "!=", 2) == 0) {
@@ -283,9 +297,23 @@ Token *tokenize(char *p) {
       continue;
     }
 
+    // 数値
     if (isdigit(*p)) {
       cur = new_token(TK_NUM, cur, p, 1);
       cur->val = strtol(p, &p, 10);
+      continue;
+    }
+
+    // ローカル変数
+    char *s = p;
+    while ('a' <= *s && *s <= 'z') {
+      s++;
+    }
+    if (s != p) {
+      const int length = s - p;
+      cur = new_token(TK_IDENT, cur, p, length);
+      cur->len = length;
+      p = s;
       continue;
     }
 
