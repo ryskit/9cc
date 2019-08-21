@@ -36,5 +36,7 @@ try 1 '7!=6;'
 try 99 'a=99;'
 try 14 'a = 3; b = 5 * 6 - 8; return a + b / 2;'
 try 0 'foo = 4; return 0; bar = 7;'
+try 1 'foo = 0; if (1 == 1) foo = 1; return foo;'
+try 99 'if (1 == 1) 99;'
 
 echo OK

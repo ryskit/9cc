@@ -170,7 +170,11 @@ Node *expr() {
 
 Node *stmt() {
   Node *node;
-  if (consume_by_kind(TK_RETURN)) {
+  if (consume_by_kind(TK_IF)) {
+    node = new_node(ND_IF, expr(), NULL);
+    node->rhs = stmt();
+    return node;
+  } else if (consume_by_kind(TK_RETURN)) {
     node = new_node(ND_RETURN, expr(), NULL);
   } else {
     node = expr();
@@ -263,6 +267,13 @@ Token* tokenize(char *p) {
     // 空白文字をスキップ
     if (isspace(*p)) {
       p++;
+      continue;
+    }
+
+    // if文
+    if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
+      cur = new_token(TK_IF, cur, p, 2);
+      p += 2;
       continue;
     }
 

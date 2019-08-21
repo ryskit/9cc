@@ -11,6 +11,7 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
+  static int label_sequence_no = 0;
   switch (node->kind) {
     case ND_NUM:
       printf("  push %d\n", node->val);
@@ -35,6 +36,15 @@ void gen(Node *node) {
       printf("  mov rsp, rbp\n");
       printf("  pop rbp\n");
       printf("  ret\n");
+      return;
+    case ND_IF:
+      gen(node->lhs);
+      printf("  pop rax\n");
+      printf("  cmp rax, 0\n");
+      printf("  je .Lend%08d\n", label_sequence_no);
+      gen(node->rhs);
+      printf(".Lend%08d:", label_sequence_no);
+      label_sequence_no++;
       return;
     default:
       break;
