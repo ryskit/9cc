@@ -1,3 +1,5 @@
+#include "vector.h"
+
 // 抽象構文木のノードの種類
 typedef enum {
   ND_ADD, // +
@@ -10,8 +12,10 @@ typedef enum {
   ND_NOT_EQUAL, // !=
   ND_ASSIGN,  // =
   ND_RETURN, // return
-  ND_IF,     // if
+  ND_IF, // if
+  ND_ELSE, // else
   ND_LVAR,    // ローカル変数
+  ND_BLOCK,    // ブロック
   ND_NUM, // 整数
 } NodeKind;
 
@@ -19,6 +23,8 @@ typedef struct Node {
   NodeKind kind;      // 演算子かND_NUM
   struct Node *lhs;   // 左辺
   struct Node *rhs;   // 右辺
+  struct Node *condition; // 条件(ifの場合のみ)
+  Vector *block;   // ブロック
   int val;            // kindがND_NUMの場合のみ使う
   int offset;         // kindがND_LVARの場合のみ使う
 } Node;
@@ -29,6 +35,7 @@ typedef enum {
   TK_IDENT,       // 識別子
   TK_RETURN,      // return文
   TK_IF,          // if文
+  TK_ELSE,        // else文
   TK_NUM,         // 整数トークン
   TK_EOF,         // 入力の終わりを表すトークン
 } TokenKind;

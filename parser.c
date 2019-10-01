@@ -1,9 +1,9 @@
 #include "9cc.h"
 #include <stdlib.h>
 #include <ctype.h>
-#include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 // ローカル変数の型
 typedef struct LVar LVar;
@@ -23,9 +23,6 @@ LVar *find_lvar(Token *token) {
       return var;
   return NULL;
 }
-
-// 文を格納する配列
-Node *code[100];
 
 // 現在着目しているトークン
 Token *token;
@@ -168,30 +165,59 @@ Node *expr() {
   return assign();
 }
 
+Token* peek(TokenKind kind) {
+  for (Token* t = token; t != NULL && t->kind != TK_EOF; t = t->next) {
+    if (t->kind == kind) {
+      return t;
+    }
+  }
+  return NULL;
+}
+
 Node *stmt() {
   Node *node;
   if (consume_by_kind(TK_IF)) {
-    node = new_node(ND_IF, expr(), NULL);
-    node->rhs = stmt();
+    node = new_node(ND_IF, NULL, NULL);
+    node->condition = expr();
+    Node *then_statement = stmt();
+    node->lhs = then_statement;
+    Token* maybe_else = peek(TK_ELSE);
+    if (maybe_else != NULL) {
+      token = maybe_else->next; // elseトークンをスキップ: consume関数がやってること
+      node->rhs = stmt();
+    }
     return node;
   } else if (consume_by_kind(TK_RETURN)) {
     node = new_node(ND_RETURN, expr(), NULL);
+  } else if (consume("{")) {
+    Vector *vec = new_vec();
+    do {
+      vec_push(vec, stmt());
+    } while (!consume("}"));
+    node = new_node(ND_BLOCK, NULL, NULL);
+    node->block = vec;
+    return node; // ここでreturnするので文末
   } else {
     node = expr();
   }
 
-  if (!consume(";"))
+  if (!consume(";")) {
     error_exit("';'ではないトークンです: %d %s", token->kind, token->str);
+  }
 
   return node;
 }
 
+// 文を格納する配列
+Node *code[100];
+static int statement_index = 0;
+
 void program() {
-  int i = 0;
+  statement_index = 0;
   while (!at_eof()) {
-    code[i++] = stmt();
+    code[statement_index++] = stmt();
   }
-  code[i] = NULL;
+  code[statement_index] = NULL;
 }
 
 // 前方宣言
@@ -270,6 +296,13 @@ Token* tokenize(char *p) {
       continue;
     }
 
+    // return文
+    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_RETURN, cur, p, 6);
+      p += 6;
+      continue;
+    }
+
     // if文
     if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
       cur = new_token(TK_IF, cur, p, 2);
@@ -277,10 +310,10 @@ Token* tokenize(char *p) {
       continue;
     }
 
-    // return文
-    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
-      cur = new_token(TK_RETURN, cur, p, 6);
-      p += 6;
+    // else文
+    if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
+      cur = new_token(TK_ELSE, cur, p, 4);
+      p += 4;
       continue;
     }
 
@@ -303,7 +336,7 @@ Token* tokenize(char *p) {
       }
     }
 
-    if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')' || *p == '=' || *p == ';') {
+    if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')' || *p == '=' || *p == ';' || *p == '{' || *p == '}') {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
