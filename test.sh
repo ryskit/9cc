@@ -17,6 +17,8 @@ try() {
   fi
 }
 
+try 1 "a = 0; while (a == 0) { return a = a + 1; }"
+
 try 0 '0;'
 try 42 '42;'
 try 21 '5+20-4;'

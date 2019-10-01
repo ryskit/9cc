@@ -187,6 +187,11 @@ Node *stmt() {
       node->rhs = stmt();
     }
     return node;
+  } else if (consume_by_kind(TK_WHILE)) {
+    node = new_node(ND_WHILE, NULL, NULL);
+    node->condition = expr();
+    node->lhs = stmt();
+    return node;
   } else if (consume_by_kind(TK_RETURN)) {
     node = new_node(ND_RETURN, expr(), NULL);
   } else if (consume("{")) {
@@ -317,6 +322,19 @@ Token* tokenize(char *p) {
       continue;
     }
 
+    // while文
+    if (strncmp(p, "while", 5) == 0 && !is_alnum(p[5])) {
+      cur = new_token(TK_WHILE, cur, p, 5);
+      p += 5;
+      continue;
+    }
+
+    // for文
+    if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
+      cur = new_token(TK_WHILE, cur, p, 3);
+      p += 5;
+      continue;
+    }
     // 関係演算子
     char *q = p + 1;
     if (*q) {
