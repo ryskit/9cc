@@ -43,8 +43,8 @@ void gen(Node *node) {
       gen(node->condition);
       printf("  pop rax\n");
       printf("  cmp rax, 0\n");
-      Node *maybe_else = node->rhs;
-      if (maybe_else) {
+      if (node->rhs) {
+        // elseがある場合
         printf("  je .Lelse%08d\n", label_sequence_no);
         gen(node->lhs);
         printf("  jmp .Lend%08d\n", label_sequence_no);
@@ -52,6 +52,7 @@ void gen(Node *node) {
         gen(node->rhs);
         printf(".Lend%08d:\n", label_sequence_no);
       } else {
+        // elseがない場合
         printf("  je .Lend%08d\n", label_sequence_no);
         gen(node->lhs);
         printf(".Lend%08d:\n", label_sequence_no);
@@ -61,12 +62,32 @@ void gen(Node *node) {
     case ND_WHILE:
       printf(".Lbegin%08d:\n", label_sequence_no);
       gen(node->condition);
-      printf("   pop rax\n");
-      printf("   cmp rax, 0\n");
-      printf("   je .Lend%08d\n", label_sequence_no);
+      printf("  pop rax\n");
+      printf("  cmp rax, 0\n");
+      printf("  je .Lend%08d\n", label_sequence_no);
       gen(node->lhs);
-      printf("   jmp .Lbegin%08d\n", label_sequence_no);
+      printf("  jmp .Lbegin%08d\n", label_sequence_no);
       printf(".Lend%08d:\n", label_sequence_no);
+      label_sequence_no++;
+      return;
+    case ND_FOR:
+      if (node->block->data[0]) {
+        gen(node->block->data[0]);
+      }
+      printf(".Lbegin%08d:\n", label_sequence_no);
+      if (node->block->data[1]) {
+        gen(node->block->data[1]);
+      }
+      printf("  pop rax\n");
+      printf("  cmp rax, 0\n");
+      printf("  je .Lend%08d\n", label_sequence_no);
+      gen(node->lhs);
+      if (node->block->data[2]) {
+        gen(node->block->data[2]);
+      }
+      printf("  jmp .Lbegin%08d\n", label_sequence_no);
+      printf(".Lend%08d:\n", label_sequence_no);
+      label_sequence_no++;
       return;
     case ND_BLOCK:
       for (int i = 0; i < node->block->len; ++i) {

@@ -176,32 +176,57 @@ Token* peek(TokenKind kind) {
 
 Node *stmt() {
   Node *node;
-  if (consume_by_kind(TK_IF)) {
+  if (consume_by_kind(TK_IF)) { // if
     node = new_node(ND_IF, NULL, NULL);
     node->condition = expr();
-    Node *then_statement = stmt();
-    node->lhs = then_statement;
+    node->lhs = stmt();
     Token* maybe_else = peek(TK_ELSE);
-    if (maybe_else != NULL) {
+    if (maybe_else != NULL) { // else
       token = maybe_else->next; // elseトークンをスキップ: consume関数がやってること
       node->rhs = stmt();
     }
     return node;
-  } else if (consume_by_kind(TK_WHILE)) {
+  } else if (consume_by_kind(TK_WHILE)) { // while
     node = new_node(ND_WHILE, NULL, NULL);
     node->condition = expr();
     node->lhs = stmt();
     return node;
-  } else if (consume_by_kind(TK_RETURN)) {
-    node = new_node(ND_RETURN, expr(), NULL);
-  } else if (consume("{")) {
+  } else if (consume_by_kind(TK_FOR)) { // for
+    if (consume("(")) {
+      Vector *v = new_vec();
+      Node * e = NULL;
+
+      e = expr();
+      vec_push(v, e);
+      if (!consume(";")) {
+        error_exit("';'ではないトークンです: %d %s", token->kind, token->str);
+      }
+      e = expr();
+      vec_push(v, e);
+      if (!consume(";")) {
+        error_exit("';'ではないトークンです: %d %s", token->kind, token->str);
+      }
+      e = expr();
+      vec_push(v, e);
+      if (!consume(")")) {
+        error_exit("')'ではないトークンです: %d %s", token->kind, token->str);
+      }
+
+      node = new_node(ND_FOR, NULL, NULL);
+      node->block = v;
+      node->lhs = stmt();
+    }
+    return node;
+  } else if (consume("{")) { // ブロック
     Vector *vec = new_vec();
     do {
       vec_push(vec, stmt());
     } while (!consume("}"));
     node = new_node(ND_BLOCK, NULL, NULL);
     node->block = vec;
-    return node; // ここでreturnするので文末
+    return node; // ここでreturnするので文末の';'は不要
+  } else if (consume_by_kind(TK_RETURN)) {
+    node = new_node(ND_RETURN, expr(), NULL);
   } else {
     node = expr();
   }
@@ -331,10 +356,11 @@ Token* tokenize(char *p) {
 
     // for文
     if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
-      cur = new_token(TK_WHILE, cur, p, 3);
-      p += 5;
+      cur = new_token(TK_FOR, cur, p, 3);
+      p += 3;
       continue;
     }
+
     // 関係演算子
     char *q = p + 1;
     if (*q) {
