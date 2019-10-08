@@ -174,11 +174,7 @@ Token* peek(TokenKind kind) {
   return NULL;
 }
 
-Token* next_by(Token *from, TokenKind kind, const char *str) {
-  if (from == NULL || from->next == NULL) {
-    return NULL;
-  }
-  Token *t = from->next;
+Token* equal(Token* t, TokenKind kind, const char *str) {
   if (t->kind == kind && memcmp(t->str, str, strlen(str)) == 0) {
     return t;
   }
@@ -293,9 +289,9 @@ Node *term() {
      * あれば関数としてノードを作る
      * なければ以下の処理そのまま実行する
      */
-    Token* openParen = next_by(t, TK_RESERVED, "(");
+    Token* openParen = equal(t->next, TK_RESERVED, "(");
     if (openParen != NULL) {
-      Token *closeParen = next_by(openParen->next, TK_RESERVED, ")");
+      Token *closeParen = equal(openParen->next, TK_RESERVED, ")");
       if (closeParen != NULL) {
         token = closeParen->next;
         Node *node = new_node(ND_FUN, NULL, NULL);

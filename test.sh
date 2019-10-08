@@ -5,7 +5,7 @@ try() {
   input="$2"
 
   ./9cc "$input" > tmp.s
-  gcc -o tmp tmp.s
+  gcc -o tmp tmp.s ext/foo.o
   ./tmp
   actual="$?"
 
@@ -56,5 +56,6 @@ try 0 'i = 0; while (0) i = 1; return i;'
 try 5 'i = 0; while (i < 5) i = i + 1; return i;'
 try 8 'x = 2; for (i = 0; i < 2; i = i + 1) x = x * 2; x;'
 try 10 'x = 0; for (i = 0; i < 10; i = i + 1) { x = x + 1; } x;'
+try 0 'foo();'
 
 echo OK
