@@ -174,6 +174,17 @@ Token* peek(TokenKind kind) {
   return NULL;
 }
 
+Token* next_by(Token *from, TokenKind kind, const char *str) {
+  if (from == NULL || from->next == NULL) {
+    return NULL;
+  }
+  Token *t = from->next;
+  if (t->kind == kind && memcmp(t->str, str, strlen(str)) == 0) {
+    return t;
+  }
+  return NULL;
+}
+
 Node *stmt() {
   Node *node;
   if (consume_by_kind(TK_IF)) { // if
@@ -275,22 +286,37 @@ Node *term() {
   }
 
   // ローカル変数
-  Token* token = consume_ident();
-  if (token != NULL) {
-    Node *node = calloc(1, sizeof(Node));
-    node->kind = ND_LVAR;
-    LVar *lvar = find_lvar(token);
-    if (lvar != NULL) {
-      node->offset = lvar->offset;
-    } else {
+  Token* t = consume_ident();
+  if (t != NULL) {
+    /**
+     * カッコを先読み
+     * あれば関数としてノードを作る
+     * なければ以下の処理そのまま実行する
+     */
+    Token* openParen = next_by(t, TK_RESERVED, "(");
+    if (openParen != NULL) {
+      Token *closeParen = next_by(openParen->next, TK_RESERVED, ")");
+      if (closeParen != NULL) {
+        token = closeParen->next;
+        Node *node = new_node(ND_FUN, NULL, NULL);
+        node->ident = t->str;
+        node->identLength = t->len;
+        return node;
+      }
+    }
+
+    Node *node = new_node(ND_LVAR, NULL, NULL);
+    LVar *lvar = find_lvar(t);
+    if (lvar == NULL) {
       lvar = calloc(1, sizeof(LVar));
       lvar->next = locals;
-      lvar->name = token->str;
-      lvar->len = token->len;
+      lvar->name = t->str;
+      lvar->len = t->len;
       lvar->offset = (locals == NULL ? 0 : locals->offset) + 8;
       node->offset = lvar->offset;
       locals = lvar;
     }
+    node->offset = lvar->offset;
     return node;
   }
 
