@@ -57,5 +57,8 @@ try 5 'i = 0; while (i < 5) i = i + 1; return i;'
 try 8 'x = 2; for (i = 0; i < 2; i = i + 1) x = x * 2; x;'
 try 10 'x = 0; for (i = 0; i < 10; i = i + 1) { x = x + 1; } x;'
 try 0 'foo();'
+try 0 'foo(1);'
+try 0 'foo(1, 2, 3, 4, 5);'
+try 0 'i = 9; j = 99; foo(i, j);'
 
 echo OK
