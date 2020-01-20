@@ -274,16 +274,15 @@ Node *mul() {
 }
 
 Node *local_var(Token* t) {
-  Node *node = new_node(ND_LVAR, NULL, NULL);
+  Node * node = new_node(ND_LVAR, NULL, NULL);
   LVar *lvar = find_lvar(t);
-
   if (lvar == NULL) {
+    // LVarをnewする
     lvar = calloc(1, sizeof(LVar));
     lvar->next = locals;
     lvar->name = t->str;
     lvar->len = t->len;
     lvar->offset = (locals == NULL ? 0 : locals->offset) + 8;
-    node->offset = lvar->offset;
     locals = lvar;
   }
   node->offset = lvar->offset;

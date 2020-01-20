@@ -3,7 +3,22 @@
 #include <assert.h>
 #include <string.h>
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
+static int stackpos = 0;
+
+void gen_push(char *reg) {
+  printf("  push %s\n", reg);
+  stackpos += 8;
+}
+
+void gen_push_num(int v) {
+  printf("  push %d\n", v);
+  stackpos += 8;
+}
+
+void gen_pop(char *reg) {
+  printf("  pop %s\n", reg);
+  stackpos -= 8;
+}
 
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR)
@@ -11,12 +26,21 @@ void gen_lval(Node *node) {
 
   printf("  mov rax, rbp\n");
   printf("  sub rax, %d\n", node->offset);
-  printf("  push rax\n");
+  gen_push("rax");
 }
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 void gen_fun(Node *node) {
   static char buffer[1024];
   static char *registers[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+
+  int ops = stackpos;
+  bool padding = (stackpos % 16 != 0);
+  if (padding) {
+    printf("  sub rsp, 8\n"); // RSPを16でアラインする
+    stackpos += 8;
+  }
 
   for (int i = 0; i < node->block->len; ++i) {
     Node *argNode = (Node *)node->block->data[i];
@@ -24,7 +48,7 @@ void gen_fun(Node *node) {
       printf("  mov %s, %d\n", registers[i], argNode->val);
     } else if (argNode->kind == ND_LVAR) { // ローカル変数の場合
       gen_lval(argNode);
-      printf("  pop rax\n");
+      gen_pop("rax");
       printf("  mov %s, [rax]\n", registers[i]);
     }
   }
@@ -34,39 +58,44 @@ void gen_fun(Node *node) {
   memcpy(buffer, node->ident, len);
   buffer[len] = '\0';
   printf("  call _%s\n", buffer);
+
+  if (padding) {
+    printf("  add rsp, 8\n"); // 16バイトアラインの後始末
+    stackpos -= 8;
+  }
 }
 
-void gen(Node *node) {
+GenResult gen(Node *node) {
   static int label_sequence_no = 0;
 
   switch (node->kind) {
     case ND_NUM:
-      printf("  push %d\n", node->val);
-      return;
+      gen_push_num(node->val);
+      return GEN_PUSHED_RESULT;
     case ND_LVAR: // 変数の参照
       gen_lval(node);
-      printf("  pop rax\n");
+      gen_pop("rax");
       printf("  mov rax, [rax]\n");
-      printf("  push rax\n");
-      return;
+      gen_push("rax");
+      return GEN_PUSHED_RESULT;
     case ND_ASSIGN: // 変数への代入
       gen_lval(node->lhs);
       gen(node->rhs);
-      printf("  pop rdi\n");
-      printf("  pop rax\n");
+      gen_pop("rdi");
+      gen_pop("rax");
       printf("  mov [rax], rdi\n");
-      printf("  push rdi\n");
-      return;
+      gen_push("rdi");
+      return GEN_PUSHED_RESULT;
     case ND_RETURN:
       gen(node->lhs);
-      printf("  pop rax\n");
+      gen_pop("rax");
       printf("  mov rsp, rbp\n");
-      printf("  pop rbp\n");
+      gen_pop("rbp");
       printf("  ret\n");
-      return;
+      return GEN_DONT_PUSHED_RESULT;
     case ND_IF:
       gen(node->condition);
-      printf("  pop rax\n");
+      gen_pop("rax");
       printf("  cmp rax, 0\n");
       if (node->rhs) {
         // elseがある場合
@@ -83,18 +112,18 @@ void gen(Node *node) {
         printf(".Lend%08d:\n", label_sequence_no);
       }
       label_sequence_no++;
-      return;
+      return GEN_PUSHED_RESULT;
     case ND_WHILE:
       printf(".Lbegin%08d:\n", label_sequence_no);
       gen(node->condition);
-      printf("  pop rax\n");
+      gen_pop("rax");
       printf("  cmp rax, 0\n");
       printf("  je .Lend%08d\n", label_sequence_no);
       gen(node->lhs);
       printf("  jmp .Lbegin%08d\n", label_sequence_no);
       printf(".Lend%08d:\n", label_sequence_no);
       label_sequence_no++;
-      return;
+      return GEN_PUSHED_RESULT;
     case ND_FOR:
       if (node->block->data[0]) {
         gen(node->block->data[0]);
@@ -103,7 +132,7 @@ void gen(Node *node) {
       if (node->block->data[1]) {
         gen(node->block->data[1]);
       }
-      printf("  pop rax\n");
+      gen_pop("rax");
       printf("  cmp rax, 0\n");
       printf("  je .Lend%08d\n", label_sequence_no);
       gen(node->lhs);
@@ -113,16 +142,16 @@ void gen(Node *node) {
       printf("  jmp .Lbegin%08d\n", label_sequence_no);
       printf(".Lend%08d:\n", label_sequence_no);
       label_sequence_no++;
-      return;
+      return GEN_PUSHED_RESULT;
     case ND_BLOCK:
       for (int i = 0; i < node->block->len; ++i) {
         gen(node->block->data[i]);
-        printf("  pop rax\n");
+        //gen_pop("rax");
       }
-      return;
+      return GEN_PUSHED_RESULT;
     case ND_FUN:
       gen_fun(node);
-      return;
+      return GEN_PUSHED_RESULT;
     default:
       break;
       // through
@@ -131,8 +160,9 @@ void gen(Node *node) {
   gen(node->lhs);
   gen(node->rhs);
 
-  printf("  pop rdi\n");
-  printf("  pop rax\n");
+  // 二項演算子系
+  gen_pop("rdi");
+  gen_pop("rax");
 
   switch (node->kind) {
     case ND_ADD:
@@ -173,5 +203,6 @@ void gen(Node *node) {
       // through
   }
 
-  printf("  push rax\n");
+  gen_push("rax");
+  return GEN_PUSHED_RESULT;
 }

@@ -26,10 +26,12 @@ int main(int argc, char **argv) {
 
   // 先頭の式から順にコード生成
   for (int i = 0; code[i]; i++) {
-    gen(code[i]);
+    GenResult result = gen(code[i]);
     // 式の評価結果としてスタックに一つの値が残っているはずなので、スタック
     // が溢れないようにポップしておく
-    printf("  pop rax\n");
+    if (result == GEN_PUSHED_RESULT) {
+      printf("  pop rax\n");
+    }
   }
 
   // エピローグ
