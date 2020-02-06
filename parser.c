@@ -42,14 +42,21 @@ Node *new_node_num(int val) {
   return node;
 }
 
-bool consume(char* op) {
+bool consume_and_next(char* op, bool must_to_next) {
   if (token->kind == TK_RESERVED &&
       strlen(op) == token->len &&
       memcmp(token->str, op, token->len) == 0) {
-    token = token->next;
+    if (must_to_next) {
+      token = token->next;
+    }
     return true;
   }
   return false;
+}
+
+
+bool consume(char* op) {
+  return consume_and_next(op, true);
 }
 
 Token* consume_by_kind(TokenKind kind) {
@@ -236,6 +243,14 @@ Node *stmt() {
     node = new_node(ND_RETURN, expr(), NULL);
   } else {
     node = expr();
+    // ノードが関数ノードで次がブロックの場合は関数定義ノード
+    if (node->kind == ND_FUN && consume_and_next("{", false)) {
+      if (node->val == 1)
+        error_exit("関数呼び出しと関数定義の記述が曖昧です: %d %s", token->kind, token->str);
+      node->kind = ND_FUN_IMPL;
+      node->lhs = stmt();
+      return node;
+    }
   }
 
   if (!consume(";")) {
@@ -252,7 +267,19 @@ static int statement_index = 0;
 void program() {
   statement_index = 0;
   while (!at_eof()) {
-    code[statement_index++] = stmt();
+    Node *node = stmt();
+    code[statement_index] = node;
+#if 0
+    // ノードがブロックの場合、直前のノードを調べて、
+        // 関数呼び出しノードであれば、関数定義ノードに書き換える
+        if (node->kind == ND_BLOCK && statement_index != 0) {
+            Node *maybeFun = code[statement_index - 1];
+            if (maybeFun->kind == ND_FUN && maybeFun->val == 0) {
+                maybeFun->kind = ND_FUN_IMPL;
+            }
+        }
+#endif
+    statement_index++;
   }
   code[statement_index] = NULL;
 }
@@ -310,6 +337,7 @@ Node *term() {
           vec_push(args, local_var(at));
         } else if (at->kind == TK_NUM) {
           vec_push(args, new_node_num(at->val));
+          at->val = 1; // 関数呼び出し確定とする
         } else {
           closeParen = equal(at, TK_RESERVED, ")");
           if (closeParen != NULL) {

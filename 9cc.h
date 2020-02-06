@@ -19,6 +19,7 @@ typedef enum {
   ND_LVAR,    // ローカル変数
   ND_BLOCK,    // ブロック
   ND_FUN, // 関数
+  ND_FUN_IMPL, // 関数定義
   ND_NUM, // 整数
 } NodeKind;
 
@@ -41,19 +42,20 @@ static inline const char* NodeKindDescription(NodeKind kind) {
     "ND_LVAR",    // ローカル変数
     "ND_BLOCK",    // ブロック
     "ND_FUN", // 関数
+    "ND_FUN_IMPL", // 関数定義
     "ND_NUM", // 整数
   };
   return description[kind];
 }
 
 typedef struct Node {
-  NodeKind kind;      // 演算子かND_NUM
+  NodeKind kind;      // 種別
   struct Node *lhs;   // 左辺
   struct Node *rhs;   // 右辺
   struct Node *condition; // 条件(ifの場合のみ)
   Vector *block;   // ブロック
-  int val;            // kindがND_NUMの場合のみ使う
-  char *ident;    // kindがND_FUNの婆愛のみ使う(関数名)
+  int val;            // kindがND_NUMの場合はその値、kindがND_FUNの場合、関数呼び出し確定済かどうかを示すフラグ値
+  char *ident;    // kindがND_FUNの場合のみ使う(関数名)
   int identLength;    // 上記の長さ
   int offset;         // kindがND_LVARの場合のみ使う
 } Node;
