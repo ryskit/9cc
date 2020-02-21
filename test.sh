@@ -61,52 +61,63 @@ try() {
 #try 0 'foo(7, 8, 9, 10, 11);'
 #try 0 'i = 9; j = 99; foo(i, j);'
 #try 0 'bar(i, j) { return i * j; }'
-#try 7 '
-#fun() {
-#	return 7;
-#}
-#main() {
-#	i = fun();
-#	return i;
-#}
-#'
-#try 3 '
-#fun() {
-#	return 1 + 1;
-#}
-#main() {
-#	return fun() + 1;
-#}
-#'
-#try 4 '
-#fun(i) {
-#	return i + 3;
-#}
-#main() {
-#	return fun(1);
-#}
-#'
-#try 55 '
-#fib(i) {
-#	if (i < 2) {
-#		return i;
-#	} else {
-#		j = i - 2;
-#		k = i - 1;
-#		return fib(j) + fib(k);
-#	}
-#}
-#main() {
-#	return fib(10);
-#}
-#'
+try 7 '
+int fun() {
+	return 7;
+}
+int main() {
+	int i;
+	i = fun();
+	return i;
+}
+'
+try 3 '
+int fun() {
+	return 1 + 1;
+}
+int main() {
+	return fun() + 1;
+}
+'
+try 4 '
+int fun(int i) {
+	return i + 3;
+}
+int main() {
+	return fun(1);
+}
+'
+try 55 '
+int fib(int i) {
+	if (i < 2) {
+		return i;
+	} else {
+		int j;
+		j	= i - 2;
+		int k;
+		k = i - 1;
+		return fib(j) + fib(k);
+	}
+}
+int main() {
+	return fib(10);
+}
+'
 try 28 '
-main() {
+int main() {
 	int i;
 	i = 28;
 	int a;
 	a = &i;
 	return *a;
+}
+'
+try 111 '
+int fun(int a, int b, int c) {
+	return a + b + 1;
+}
+int main() {
+	return fun(10, 100);
 }
 '
 

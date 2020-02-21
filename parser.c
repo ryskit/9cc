@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <assert.h>
 
+// 現在のパース位置がトップレベルかどうか
+static int nest_level = 0;
+
 // ローカル変数の型
 typedef struct LVar LVar;
 struct LVar {
@@ -216,7 +219,89 @@ Token* equal(Token* t, TokenKind kind, const char *str) {
     return NULL;
 }
 
+Node *declare_function(Token *indentifier) {
+    if (indentifier != NULL) {
+        // `()`を先読みしてあれば関数ノードを作成する
+        Token* openParen = equal(indentifier->next, TK_RESERVED, "(");
+        if (openParen != NULL) {
+            Token *closeParen = NULL;
+            Vector *args = new_vec();
+            for (Token* at = openParen->next; at != NULL; at = at->next) {
+                if (at->kind == TK_IDENT) {
+                    vec_push(args, reference_local_var(at));
+                } else if (at->kind == TK_NUM) {
+                    vec_push(args, new_node_num(at->val));
+                    at->val = 1; // 関数呼び出し確定とする
+                } else {
+                    closeParen = equal(at, TK_RESERVED, ")");
+                    if (closeParen != NULL) {
+                        break;
+                    } else if (equal(at, TK_RESERVED, ",") == NULL) {
+                        error_exit("関数呼び出しシンタックスエラー: %s\n", at->str);
+                    }
+                }
+            }
+            token = closeParen->next;
+            Node *node = new_node(ND_FUN, NULL, NULL);
+            node->ident = indentifier->str;
+            node->identLength = indentifier->len;
+            node->block = args;
+            return node;
+        }
+    }
+    return NULL;
+}
+
+Node *stmt();
+
+Node *define_function(Token *indentifier) {
+    if (indentifier != NULL) {
+        // `()`を先読みしてあれば関数定義ノードを作成する
+        Token* openParen = equal(indentifier->next, TK_RESERVED, "(");
+        if (openParen != NULL) {
+            Token *closeParen = NULL;
+            Vector *args = new_vec();
+            int type_declared = 0;
+            for (Token* at = openParen->next; at != NULL; at = at->next) {
+                if (at->kind == TK_INT) {
+                    // 引数の型は単なる読み捨て
+                    type_declared = 1;
+                } else if (at->kind == TK_IDENT) {
+                    if (!type_declared)
+                        error_exit("関数定義シンタックスエラー: %s\n", at->str);
+                    type_declared = 0;
+                    vec_push(args, define_local_var(at));
+                } else {
+                    type_declared = 0;
+                    closeParen = equal(at, TK_RESERVED, ")");
+                    if (closeParen != NULL) {
+                        break;
+                    } else if (equal(at, TK_RESERVED, ",") == NULL) {
+                        error_exit("関数定義シンタックスエラー: %s\n", at->str);
+                    }
+                }
+            }
+            token = closeParen->next;
+            Node *node = new_node(ND_FUN_IMPL, NULL, NULL);
+            node->ident = indentifier->str;
+            node->identLength = indentifier->len;
+            node->block = args;
+
+            // 次がブロックかどうか
+            if (!consume_and_next("{", false)) {
+                error_exit("関数定義シンタックスエラー: %s\n", token->str);
+            }
+
+            node->lhs = stmt();
+            return node;
+        }
+    }
+    return NULL;
+}
+
 Node *stmt() {
+    nest_level++;
+
     Node *node;
     if (consume_by_kind(TK_IF)) { // if
         node = new_node(ND_IF, NULL, NULL);
@@ -270,17 +355,14 @@ Node *stmt() {
     } else if (consume_by_kind(TK_RETURN)) {
         node = new_node(ND_RETURN, expr(), NULL);
     } else if (consume_by_kind(TK_INT)) {
-        node = define_local_var(consume_ident());
+        if (nest_level == 1) {
+            return define_function(consume_ident());
+        }
+        else {
+            node = define_local_var(consume_ident());
+        }
     } else {
         node = expr();
-        // ノードが関数ノードで次がブロックの場合は関数定義ノード
-        if (node->kind == ND_FUN && consume_and_next("{", false)) {
-            if (node->val == 1)
-                error_exit("関数呼び出しと関数定義の記述が曖昧です: %d %s", token->kind, token->str);
-            node->kind = ND_FUN_IMPL;
-            node->lhs = stmt();
-            return node;
-        }
     }
 
     if (!consume(";")) {
@@ -297,6 +379,7 @@ static int statement_index = 0;
 void program() {
     statement_index = 0;
     while (!at_eof()) {
+        nest_level = 0;
         Node *node = stmt();
         code[statement_index] = node;
 #if 0
@@ -340,39 +423,18 @@ Node *term() {
     }
 
     // 識別子
-    Token* t = consume_ident();
+    Token *t = consume_ident();
     if (t != NULL) {
-        // `()`を先読みしてあれば関数ノードを作成する
-        Token* openParen = equal(t->next, TK_RESERVED, "(");
-        if (openParen != NULL) {
-            Token *closeParen = NULL;
-            Vector *args = new_vec();
-            for (Token* at = openParen->next; at != NULL; at = at->next) {
-                if (at->kind == TK_IDENT) {
-                    vec_push(args, reference_local_var(at));
-                } else if (at->kind == TK_NUM) {
-                    vec_push(args, new_node_num(at->val));
-                    at->val = 1; // 関数呼び出し確定とする
-                } else {
-                    closeParen = equal(at, TK_RESERVED, ")");
-                    if (closeParen != NULL) {
-                        break;
-                    } else if (equal(at, TK_RESERVED, ",") == NULL) {
-                        error_exit("関数呼び出しシンタックスエラー: %s\n", at->str);
-                    }
-                }
-            }
-            token = closeParen->next;
-            Node *node = new_node(ND_FUN, NULL, NULL);
-            node->ident = t->str;
-            node->identLength = t->len;
-            node->block = args;
-            return node;
+        // 関数宣言ノード
+        Node *node = declare_function(t);
+        if (!node) {
+            // ローカル変数
+            node = reference_local_var(t);
         }
-        // ローカル変数
-        return reference_local_var(t);
+        return node;
     }
 
+    // ポインタ
     Node *node = pointer();
     if (node) {
         return node;
