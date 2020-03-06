@@ -121,4 +121,16 @@ int main() {
 }
 '
 
+try 3 '
+int main() {
+	int x;
+	int *y;
+	int **z;
+	y = &x;
+	z = &y;
+	**z = 3;
+	return x;
+}
+'
+
 echo OK

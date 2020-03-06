@@ -8,6 +8,13 @@
 // 現在のパース位置がトップレベルかどうか
 static int nest_level = 0;
 
+// 型
+typedef struct Type Type;
+struct Type {
+    enum { INT, PTR } type; // 型の種別
+    Type *ptr_to;           // typeがPTRの時だけ有効
+};
+
 // ローカル変数の型
 typedef struct LVar LVar;
 struct LVar {
@@ -15,6 +22,7 @@ struct LVar {
     char *name; // 変数の名前
     int len;    // 名前の長さ
     int offset; // RBPからのオフセット
+    Type *type;  // 型情報
 };
 
 LVar *locals;   // ローカル変数のリストの先頭
@@ -42,34 +50,6 @@ Node *new_node_num(int val) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_NUM;
     node->val = val;
-    return node;
-}
-
-Node *reference_local_var(Token* t) {
-    Node *node = new_node(ND_LVAR, NULL, NULL);
-    LVar *lvar = find_lvar(t);
-    if (lvar == NULL) {
-        error_exit("変数が定義されていません: %s\n", t->str);
-    }
-    node->offset = lvar->offset;
-    return node;
-}
-
-Node *define_local_var(Token* t) {
-    LVar *lvar = find_lvar(t);
-    if (lvar) {
-        error_exit("同名の変数が定義されています: %s\n", t->str);
-    }
-    Node *node = new_node(ND_LVAR, NULL, NULL);
-    lvar = calloc(1, sizeof(LVar));
-    lvar->next = locals;
-    lvar->name = t->str;
-    lvar->len = t->len;
-    lvar->offset = (locals == NULL ? 0 : locals->offset) + 8;
-
-    locals = lvar;
-
-    node->offset = lvar->offset;
     return node;
 }
 
@@ -103,10 +83,66 @@ Token* consume_ident() {
     return consume_by_kind(TK_IDENT);
 }
 
+Node *reference_local_var(Token* t) {
+    Node *node = new_node(ND_LVAR, NULL, NULL);
+    LVar *lvar = find_lvar(t);
+    if (lvar == NULL) {
+        error_exit("変数が定義されていません: %s\n", t->str);
+    }
+    node->offset = lvar->offset;
+    return node;
+}
+
+Node *define_local_var() {
+    D("token: %s", TokenDescription(token));
+
+    // （連続する）ポインタ修飾をパースする
+    Type *type_root = NULL;
+    Type *type_current = NULL;
+    while (consume("*")) {
+        Type *ti = calloc(1, sizeof(Type));
+        ti->type = PTR;
+        if (!type_root) {
+            type_root = ti;
+        }
+        if (type_current) {
+            type_current->ptr_to = ti;
+        }
+        type_current = ti;
+    }
+
+    Token *t = consume_ident();
+    if (!t) {
+        error_exit("識別子がありません: %s\n", TokenDescription(token));
+    }
+
+    LVar *lvar = find_lvar(t);
+    if (lvar) {
+        error_exit("同名の変数が定義されています: %s\n", t->str);
+    }
+    Node *node = new_node(ND_LVAR, NULL, NULL);
+    lvar = calloc(1, sizeof(LVar));
+    lvar->next = locals;
+    lvar->name = t->str;
+    lvar->len = t->len;
+    lvar->offset = (locals == NULL ? 0 : locals->offset) + 8;
+    lvar->type = type_root;
+
+    locals = lvar;
+
+    node->offset = lvar->offset;
+
+    return node;
+}
+
+bool is_reserved_with(Token *token, char c) {
+    return token->kind == TK_RESERVED && token->str[0] == c;
+}
+
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
 // それ以外の場合にはエラーを報告する。
 void expect(char op) {
-    if (token->kind != TK_RESERVED || token->str[0] != op)
+    if (!is_reserved_with(token, op))
         error_exit("'%c'ではありません", op);
     token = token->next;
 }
@@ -115,7 +151,7 @@ void expect(char op) {
 // それ以外の場合にはエラーを報告する。
 int expect_number() {
     if (token->kind != TK_NUM)
-        error_exit("数ではありません");
+        error_exit("数ではありません: %s", TokenDescription(token));
     int val = token->val;
     token = token->next;
     return val;
@@ -258,30 +294,33 @@ Node *define_function(Token *indentifier) {
     if (indentifier != NULL) {
         // `()`を先読みしてあれば関数定義ノードを作成する
         Token* openParen = equal(indentifier->next, TK_RESERVED, "(");
-        if (openParen != NULL) {
+        if (openParen) {
             Token *closeParen = NULL;
             Vector *args = new_vec();
             int type_declared = 0;
-            for (Token* at = openParen->next; at != NULL; at = at->next) {
+            for (Token* at = openParen->next; at; at = at->next) {
+                D("%s", TokenDescription(at));
                 if (at->kind == TK_INT) {
                     // 引数の型は単なる読み捨て
                     type_declared = 1;
-                } else if (at->kind == TK_IDENT) {
+                } else if (is_reserved_with(at, '*') || at->kind == TK_IDENT) {
                     if (!type_declared)
                         error_exit("関数定義シンタックスエラー: %s\n", at->str);
                     type_declared = 0;
-                    vec_push(args, define_local_var(at));
+                    D("at: %s", TokenDescription(at));
+                    token = at; // Ad-Hocすぎる...
+                    vec_push(args, define_local_var());
                 } else {
                     type_declared = 0;
                     closeParen = equal(at, TK_RESERVED, ")");
-                    if (closeParen != NULL) {
+                    if (closeParen) {
                         break;
                     } else if (equal(at, TK_RESERVED, ",") == NULL) {
                         error_exit("関数定義シンタックスエラー: %s\n", at->str);
                     }
                 }
             }
-            token = closeParen->next;
+            token = closeParen->next; // Ad-Hocすぎる...
             Node *node = new_node(ND_FUN_IMPL, NULL, NULL);
             node->ident = indentifier->str;
             node->identLength = indentifier->len;
@@ -356,10 +395,12 @@ Node *stmt() {
         node = new_node(ND_RETURN, expr(), NULL);
     } else if (consume_by_kind(TK_INT)) {
         if (nest_level == 1) {
+            // 戻り値としてのintなので関数定義としてパースする
             return define_function(consume_ident());
         }
         else {
-            node = define_local_var(consume_ident());
+            // ローカル変数定義としてパースする
+            node = define_local_var();
         }
     } else {
         node = expr();
@@ -382,16 +423,6 @@ void program() {
         nest_level = 0;
         Node *node = stmt();
         code[statement_index] = node;
-#if 0
-        // ノードがブロックの場合、直前のノードを調べて、
-        // 関数呼び出しノードであれば、関数定義ノードに書き換える
-        if (node->kind == ND_BLOCK && statement_index != 0) {
-            Node *maybeFun = code[statement_index - 1];
-            if (maybeFun->kind == ND_FUN && maybeFun->val == 0) {
-                maybeFun->kind = ND_FUN_IMPL;
-            }
-        }
-#endif
         statement_index++;
     }
     code[statement_index] = NULL;

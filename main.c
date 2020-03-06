@@ -19,6 +19,7 @@ int main(int argc, char **argv) {
 
     // 先頭の式から順にコード生成
     for (int i = 0; code[i]; i++) {
+        D("%s", node_descripion(code[i]));
         GenResult result = gen(code[i]);
         // 式の評価結果としてスタックに一つの値が残っているはずなので、スタック
         // が溢れないようにポップしておく
@@ -26,6 +27,7 @@ int main(int argc, char **argv) {
             printf("  pop rax\n");
         }
     }
+    D("finish");
 
     return 0;
 }
