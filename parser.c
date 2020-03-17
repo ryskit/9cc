@@ -13,6 +13,7 @@ typedef struct Type Type;
 struct Type {
     enum { INT, PTR } type; // 型の種別
     Type *ptr_to;           // typeがPTRの時だけ有効
+    int num_pointers;       // ポインタの数
 };
 
 // ローカル変数の型
@@ -90,15 +91,19 @@ Node *reference_local_var(Token* t) {
         error_exit("変数が定義されていません: %s\n", t->str);
     }
     node->offset = lvar->offset;
+    node->ident = lvar->name;
+    node->identLength = lvar->len;
+
+    Type *type_root = lvar->type;
+    node->num_pointers = (type_root && type_root->type == PTR) ? type_root->num_pointers : 0;
     return node;
 }
 
 Node *define_local_var() {
-    D("token: %s", TokenDescription(token));
-
     // （連続する）ポインタ修飾をパースする
     Type *type_root = NULL;
     Type *type_current = NULL;
+    int num_pointers = 0;
     while (consume("*")) {
         Type *ti = calloc(1, sizeof(Type));
         ti->type = PTR;
@@ -109,6 +114,7 @@ Node *define_local_var() {
             type_current->ptr_to = ti;
         }
         type_current = ti;
+        type_root->num_pointers += 1;
     }
 
     Token *t = consume_ident();
@@ -131,6 +137,9 @@ Node *define_local_var() {
     locals = lvar;
 
     node->offset = lvar->offset;
+    node->ident = lvar->name;
+    node->identLength = lvar->len;
+    node->num_pointers = (type_root && type_root->type == PTR) ? type_root->num_pointers : 0;
 
     return node;
 }
@@ -158,7 +167,7 @@ int expect_number() {
 }
 
 bool at_eof() {
-    if (token == NULL) {
+    if (!token) {
         return false;
     }
     return token->kind == TK_EOF;
@@ -240,7 +249,7 @@ Node *expr() {
 }
 
 Token* peek(TokenKind kind) {
-    for (Token* t = token; t != NULL && t->kind != TK_EOF; t = t->next) {
+    for (Token* t = token; t && t->kind != TK_EOF; t = t->next) {
         if (t->kind == kind) {
             return t;
         }
@@ -255,29 +264,37 @@ Token* equal(Token* t, TokenKind kind, const char *str) {
     return NULL;
 }
 
-Node *declare_function(Token *indentifier) {
-    if (indentifier != NULL) {
+Node *term();
+
+Node *calling_function(Token *indentifier) {
+    if (indentifier) {
+        assert(token == indentifier->next);
         // `()`を先読みしてあれば関数ノードを作成する
-        Token* openParen = equal(indentifier->next, TK_RESERVED, "(");
-        if (openParen != NULL) {
-            Token *closeParen = NULL;
+        Token* open_paren = equal(indentifier->next, TK_RESERVED, "(");
+        if (open_paren) {
+            Token *close_paren = NULL;
             Vector *args = new_vec();
-            for (Token* at = openParen->next; at != NULL; at = at->next) {
-                if (at->kind == TK_IDENT) {
-                    vec_push(args, reference_local_var(at));
-                } else if (at->kind == TK_NUM) {
-                    vec_push(args, new_node_num(at->val));
-                    at->val = 1; // 関数呼び出し確定とする
-                } else {
-                    closeParen = equal(at, TK_RESERVED, ")");
-                    if (closeParen != NULL) {
-                        break;
-                    } else if (equal(at, TK_RESERVED, ",") == NULL) {
-                        error_exit("関数呼び出しシンタックスエラー: %s\n", at->str);
-                    }
+            for (Token* at = open_paren->next; at; at = at->next) {
+                if (token != at) {
+                    token = at;
+                }
+                close_paren = equal(at, TK_RESERVED, ")"); // peek
+                if (close_paren) {
+                    break;
+                }
+                if (equal(at, TK_RESERVED, ",")) { // peek
+                    continue;
+                }
+                Node* node = term();
+                vec_push(args, node);
+                at = token;
+                // termでtokenが進んでしまうのでここでもう一度")"をチェックしないと...
+                close_paren = equal(at, TK_RESERVED, ")"); // peek
+                if (close_paren) {
+                    break;
                 }
             }
-            token = closeParen->next;
+            token = close_paren->next;
             Node *node = new_node(ND_FUN, NULL, NULL);
             node->ident = indentifier->str;
             node->identLength = indentifier->len;
@@ -291,7 +308,7 @@ Node *declare_function(Token *indentifier) {
 Node *stmt();
 
 Node *define_function(Token *indentifier) {
-    if (indentifier != NULL) {
+    if (indentifier) {
         // `()`を先読みしてあれば関数定義ノードを作成する
         Token* openParen = equal(indentifier->next, TK_RESERVED, "(");
         if (openParen) {
@@ -299,7 +316,6 @@ Node *define_function(Token *indentifier) {
             Vector *args = new_vec();
             int type_declared = 0;
             for (Token* at = openParen->next; at; at = at->next) {
-                D("%s", TokenDescription(at));
                 if (at->kind == TK_INT) {
                     // 引数の型は単なる読み捨て
                     type_declared = 1;
@@ -307,7 +323,6 @@ Node *define_function(Token *indentifier) {
                     if (!type_declared)
                         error_exit("関数定義シンタックスエラー: %s\n", at->str);
                     type_declared = 0;
-                    D("at: %s", TokenDescription(at));
                     token = at; // Ad-Hocすぎる...
                     vec_push(args, define_local_var());
                 } else {
@@ -347,7 +362,7 @@ Node *stmt() {
         node->condition = expr();
         node->lhs = stmt();
         Token* maybe_else = peek(TK_ELSE);
-        if (maybe_else != NULL) { // else
+        if (maybe_else) { // else
             token = maybe_else->next; // elseトークンをスキップ: consume関数がやってること
             node->rhs = stmt();
         }
@@ -455,9 +470,9 @@ Node *term() {
 
     // 識別子
     Token *t = consume_ident();
-    if (t != NULL) {
-        // 関数宣言ノード
-        Node *node = declare_function(t);
+    if (t) {
+        // 関数呼び出しノード
+        Node *node = calling_function(t);
         if (!node) {
             // ローカル変数
             node = reference_local_var(t);
@@ -484,12 +499,17 @@ Node *unary() {
 }
 
 Node *pointer() {
-    if (consume("&"))
+    if (consume("&")) {
         // オペランドについてruiさんの文書ではlhsだが他の演算子との整合性を考慮
         // してrhsにする
         return new_node(ND_ADDR, NULL, unary());
-    else if (consume("*"))
-        return new_node(ND_DEREF, NULL, unary());
+    } else if (consume("*")) {
+        Node *node = unary();
+        if (node->kind == ND_LVAR) {
+            node->num_pointers = 1; // TODO: あれ？これ必要だっけ？
+        }
+        return new_node(ND_DEREF, NULL, node);
+    }
     return NULL;
 }
 
@@ -582,13 +602,18 @@ Token* tokenize(char *p) {
         // 数値
         if (isdigit(*p)) {
             cur = new_token(TK_NUM, cur, p, 1);
-            cur->val = strtol(p, &p, 10);
+            char *q = p;
+            cur->val = strtol(p, &q, 10);
+            cur->len = q - p;
+            p = q;
             continue;
         }
 
         // ローカル変数
         char *s = p;
-        while ('a' <= *s && *s <= 'z') {
+        while (('a' <= *s && *s <= 'z') ||
+               ('0' <= *s && *s <= '9') ||
+               ('_' == *s)) {
             s++;
         }
         if (s != p) {

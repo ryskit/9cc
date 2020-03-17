@@ -65,21 +65,26 @@ typedef struct Node {
     Vector *block;      // ブロック
     int val;            // kindがND_NUMの場合はその値、kindがND_FUNの場合、関数呼び出し確定済かどうかを示すフラグ値
     char *ident;        // kindがND_FUNの場合のみ使う(関数名)
-    int identLength;    // 上記の長さ
+    int identLength;    // 上記の長さ   
     int offset;         // kindがND_LVARの場合のみ使う
+    int num_pointers;    // ポインタかどうか(ND_LVARの場合の有効)
 } Node;
 
-static inline const char* node_descripion(Node *node) {
+static inline const char* node_description(Node *node) {
     static char buffer[1024];
+    static char tmp[1024];
 
-    static char tmp[1024] = {'\0'};
-    if (node->kind == ND_LVAR) {
+    tmp[0] = '\0';
+    if (node->kind == ND_FUN || node->kind == ND_FUN_IMPL || node->kind == ND_LVAR) {
         const int n = MIN(sizeof(tmp) - 1, node->identLength);
         memcpy(tmp, node->ident, n);
         tmp[n] = '\0';
+    } else if (node->kind == ND_NUM) {
+        const int n = sprintf(tmp, "%d", node->val);
+        tmp[n] = '\0';
     }
 
-    sprintf(buffer, "Node: %-8s, `%s`, %3d, %14p/%14p/%14p",
+    sprintf(buffer, "%-8s '%-6s' %3d %14p/%14p/%14p",
             node_kind_descripion(node->kind),
             tmp,
             node->offset,
@@ -87,6 +92,14 @@ static inline const char* node_descripion(Node *node) {
             node->rhs,
             node->condition);
     return buffer;
+}
+
+static inline bool node_is_pointer_variable(Node *node) {
+    return node->kind == ND_LVAR && node->num_pointers > 0;
+}
+
+static inline bool node_is_pointer_variable_many(Node *node) {
+    return node->kind == ND_LVAR && node->num_pointers > 1;
 }
 
 // トークンの種類
@@ -143,10 +156,14 @@ static inline const char *TokenDescription(Token *token) {
     static char buffer[1024];
     static char tmp[1024];
 
-    const int length = MIN(sizeof(tmp) - 1, token->len);
-    memcpy(tmp, token->str, length);
-    tmp[length] = '\0';
+    if (!token) {
+        return "null";
+    }
 
+    const int n = MIN(sizeof(tmp) - 1, token->len);
+    memcpy(tmp, token->str, n);
+    tmp[n] = '\0';
+    
     sprintf(buffer, "Token: %s, `%s`, %p",
             TokenKindDescription(token->kind),
             tmp,
@@ -168,7 +185,7 @@ extern GenResult gen(Node *node);
 extern Node *code[];
 
 #define D(fmt, ...) \
-    fprintf(stderr, ("%s[%d] " fmt "\n"), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__)
+    fprintf(stderr, ("🐝 %s[%d] " fmt "\n"), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define D_INT(v) \
     do { D(#v "=%d", (v)); fflush(stderr); } while (0)

@@ -5,14 +5,14 @@ try() {
   input="$2"
 
   ./9cc "$input" > tmp.s
-  gcc -o tmp tmp.s extern/foo.o
+  gcc -o tmp tmp.s extern/foo.o extern/alloc4.o extern/alloc_ptr3.o
   ./tmp
   actual="$?"
 
   if [ "$actual" = "$expected" ]; then
-    echo "$input => $actual"
+    echo "💮 $input => $actual"
   else
-    echo "$expected expected, but got $actual"
+    echo "❎ $expected expected, but got $actual"
     exit 1
   fi
 }
@@ -61,6 +61,8 @@ try() {
 #try 0 'foo(7, 8, 9, 10, 11);'
 #try 0 'i = 9; j = 99; foo(i, j);'
 #try 0 'bar(i, j) { return i * j; }'
+#
+# ここから
 try 7 '
 int fun() {
 	return 7;
@@ -79,12 +81,12 @@ int main() {
 	return fun() + 1;
 }
 '
-try 4 '
+try 12 '
 int fun(int i) {
 	return i + 3;
 }
 int main() {
-	return fun(1);
+	return fun(9);
 }
 '
 try 55 '
@@ -120,7 +122,6 @@ int main() {
 	return fun(10, 100);
 }
 '
-
 try 3 '
 int main() {
 	int x;
@@ -132,5 +133,43 @@ int main() {
 	return x;
 }
 '
+try 8 '
+int main() {
+	int *p;
+	alloc4(&p, 1, 2, 4, 8);
+	int *q;
+	q = p + 3;
+	return *q;
+}
+'
+try 2 '
+int main() {
+	int *p;
+	alloc4(&p, 1, 2, 4, 8);
+	int *q;
+	q = p + 3;
+	q = q - 2;
+	return *q;
+}
+'
+try 9 '
+int main() {
+	int x;
+	int y;
+	int z;
+	int **p;
+	int **q;
+	int *r;
 
-echo OK
+	x = 3;
+	y = 6;
+	z = 9;
+	alloc_ptr3(&p, &x, &y, &z);
+
+	q = p + 2;
+	r = *q;
+	return *r;
+}
+'
+
+echo DONE
