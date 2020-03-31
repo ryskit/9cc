@@ -74,20 +74,25 @@ static inline const char* node_description(Node *node) {
     static char buffer[1024];
     static char tmp[1024];
 
+    if (!node) {
+        return "null.";
+    }
+
     tmp[0] = '\0';
     if (node->kind == ND_FUN || node->kind == ND_FUN_IMPL || node->kind == ND_LVAR) {
         const int n = MIN(sizeof(tmp) - 1, node->identLength);
         memcpy(tmp, node->ident, n);
         tmp[n] = '\0';
     } else if (node->kind == ND_NUM) {
-        const int n = sprintf(tmp, "%d", node->val);
+        const int n = sprintf(tmp, "num:%d", node->val);
         tmp[n] = '\0';
     }
 
-    sprintf(buffer, "%-8s '%-6s' %3d %14p/%14p/%14p",
+    sprintf(buffer, "%-8s '%-6s' %3d %2d %14p/%14p/%14p",
             node_kind_descripion(node->kind),
             tmp,
             node->offset,
+            node->num_pointers,
             node->lhs,
             node->rhs,
             node->condition);
@@ -113,10 +118,11 @@ typedef enum {
     TK_FOR,         // for文
     TK_NUM,         // 整数トークン
     TK_INT,         // "int"と言う名前の型
+    TK_SIZEOF,      // sizeof
     TK_EOF,         // 入力の終わりを表すトークン
 } TokenKind;
 
-static inline const char *TokenKindDescription(TokenKind kind) {
+static inline const char *token_kind_description(TokenKind kind) {
     switch (kind) {
     case TK_RESERVED:    // 記号
         return "RESERVED";
@@ -136,6 +142,8 @@ static inline const char *TokenKindDescription(TokenKind kind) {
         return "NUM";
     case TK_INT:         // "int"と言う名前の型
         return "INT";
+    case TK_SIZEOF:
+        return "SIZEOF";
     case TK_EOF:         // 入力の終わりを表すトークン
         return "EOF";
     }
@@ -152,7 +160,7 @@ typedef struct Token {
     char *input;        // トークン文字列（エラーメッセージ用）
 } Token;
 
-static inline const char *TokenDescription(Token *token) {
+static inline const char *token_description(Token *token) {
     static char buffer[1024];
     static char tmp[1024];
 
@@ -164,8 +172,8 @@ static inline const char *TokenDescription(Token *token) {
     memcpy(tmp, token->str, n);
     tmp[n] = '\0';
     
-    sprintf(buffer, "Token: %s, `%s`, %p",
-            TokenKindDescription(token->kind),
+    sprintf(buffer, "Token: %s, `%s` %p",
+            token_kind_description(token->kind),
             tmp,
             token->next);
     return buffer;
@@ -185,7 +193,13 @@ extern GenResult gen(Node *node);
 extern Node *code[];
 
 #define D(fmt, ...) \
-    fprintf(stderr, ("🐝 %s[%d] " fmt "\n"), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__)
+    fprintf(stderr, ("🐝 %s[%s#%d] " fmt "\n"), __PRETTY_FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define D_INT(v) \
     do { D(#v "=%d", (v)); fflush(stderr); } while (0)
+
+#define D_NODE(n) \
+    do { D(#n "=%s", node_description(n)); fflush(stderr); } while (0)
+
+#define D_TOKEN(t) \
+    do { D(#t "=%s", token_description(t)); fflush(stderr); } while (0)

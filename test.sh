@@ -10,7 +10,7 @@ try() {
   actual="$?"
 
   if [ "$actual" = "$expected" ]; then
-    echo "💮 $input => $actual"
+    echo "$input => $actual"
   else
     echo "❎ $expected expected, but got $actual"
     exit 1
@@ -169,6 +169,46 @@ int main() {
 	q = p + 2;
 	r = *q;
 	return *r;
+}
+'
+try 4 '
+int main() {
+	int i;
+	return sizeof(i);
+}
+'
+try 4 '
+int main() {
+	int i;
+	return sizeof(i + 3);
+}
+'
+try 8 '
+int main() {
+	int *i;
+	return sizeof(i);
+}
+'
+try 8 '
+int main() {
+	int *i;
+	return sizeof(i + 3);
+}
+'
+try 4 '
+int main() {
+	int *i;
+	return sizeof(*i);
+}
+'
+try 4 '
+int main() {
+	return sizeof 1;
+}
+'
+try 4 '
+int main() {
+	return sizeof(sizeof(1));
 }
 '
 

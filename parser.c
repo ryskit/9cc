@@ -119,7 +119,7 @@ Node *define_local_var() {
 
     Token *t = consume_ident();
     if (!t) {
-        error_exit("識別子がありません: %s\n", TokenDescription(token));
+        error_exit("識別子がありません: %s\n", token_description(token));
     }
 
     LVar *lvar = find_lvar(t);
@@ -160,7 +160,7 @@ void expect(char op) {
 // それ以外の場合にはエラーを報告する。
 int expect_number() {
     if (token->kind != TK_NUM)
-        error_exit("数ではありません: %s", TokenDescription(token));
+        error_exit("数ではありません: %s", token_description(token));
     int val = token->val;
     token = token->next;
     return val;
@@ -490,7 +490,32 @@ Node *term() {
     return new_node_num(expect_number());
 }
 
+// 構文木に紐づいている型がintならば4、ポインタならば8を返す
+int sizeof_ast(Node *node) {
+    if (!node) {
+        return 0;
+    }
+    if (node->kind == ND_LVAR) {
+        return node->num_pointers > 0 ? 8 : 4;
+    }
+    if (node->kind == ND_DEREF || node->kind == ND_NUM) {
+        return 4;
+    }
+    if (node->kind == ND_ADDR) {
+        return 8;
+    }
+    int l = sizeof_ast(node->lhs);
+    int r = sizeof_ast(node->rhs);
+    return l > r ? l : r;
+}
+
 Node *unary() {
+    if (consume_by_kind(TK_SIZEOF)) {
+        Node *node = term();
+        int s = sizeof_ast(node);
+        assert(s == 4 || s == 8);
+        return new_node_num(s);
+    }
     if (consume("+"))
         return term();
     if (consume("-"))
@@ -572,6 +597,13 @@ Token* tokenize(char *p) {
         if (strncmp(p, "int", 3) == 0 && !is_alnum(p[3])) {
             cur = new_token(TK_INT, cur, p, 3);
             p += 3;
+            continue;
+        }
+
+        // sizeof演算子
+        if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
+            cur = new_token(TK_SIZEOF, cur, p, 6);
+            p += 6;
             continue;
         }
 
